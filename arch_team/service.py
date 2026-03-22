@@ -180,6 +180,22 @@ def mining_upload():
             logger.warning(f"[mining] Manifest creation failed: {e}")
             # Continue anyway - manifests are optional
 
+        # Publish to Rowboat knowledge graph (dual-write)
+        try:
+            from publishing import get_arch_team_publisher
+            # Derive project name from uploaded filenames
+            file_names = [getattr(f, 'filename', '') for f in files]
+            project_name = os.path.splitext(file_names[0])[0] if file_names else "unnamed-project"
+            re_ideas_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "..", "re_ideas", "services")
+            get_arch_team_publisher().publish_requirements(
+                project_name=project_name,
+                requirements=items,
+                source_type="upload",
+                re_ideas_dir=re_ideas_dir,
+            )
+        except Exception as e:
+            logger.debug(f"[mining] Rowboat publish failed (non-critical): {e}")
+
         return jsonify({
             "success": True,
             "count": len(items),

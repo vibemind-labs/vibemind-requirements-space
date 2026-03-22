@@ -39,7 +39,15 @@ from backend.core.vector_store import (
 from backend.core.memory import MemoryStore
 from backend.core.rag import StructuredRequirement
 
-api_bp = Blueprint("api", __name__) if Blueprint is not None else None
+if Blueprint is not None:
+    api_bp = Blueprint("api", __name__)
+else:
+    # Stub so @api_bp.post / .get decorators don't crash when Flask is absent
+    class _StubBlueprint:
+        def _noop(self, *a, **kw):
+            return lambda fn: fn
+        post = get = put = delete = patch = route = _noop
+    api_bp = _StubBlueprint()
 
 # Lightweight Memory (Agent policies/outcomes)
 _mem_store = MemoryStore()

@@ -193,15 +193,15 @@ if __name__ == "__main__":
     # Use centralized port configuration with legacy fallback
     port = _ports.BACKEND_PORT if _ports else int(os.getenv("BACKEND_PORT", os.getenv("API_PORT", "8087")))
 
-    print("🚀 Starting Requirements Mining API V2")
-    print(f"📍 Host: {host}:{port}")
-    print(f"🔗 Frontend: http://{host}:{port}/mining_demo.html")
-    print(f"📊 API: http://{host}:{port}/api/v1/files/ingest")
+    print(f"Starting Requirements Mining API V2 on {host}:{port}")
+    print(f"Frontend: http://{host}:{port}/mining_demo.html")
+    print(f"API: http://{host}:{port}/api/v1/files/ingest")
 
+    reload = os.getenv("DEBUG", "true").lower() in ("1", "true", "yes", "on")
     uvicorn.run(
         "backend.main:fastapi_app",
         host=host,
         port=port,
-        reload=True,
+        reload=reload,
         log_level="info"
     )
