@@ -50,10 +50,6 @@ When the Orchestrator asks you to process documents:
 - Should be ~25% of chunk_size
 - Recommended: 200 (25% of 800)
 
-**model** (default: "gpt-4o-mini")
-- LLM used for extraction
-- Options: "gpt-4o-mini", "gpt-4o", "gpt-4-turbo"
-- Recommended: "gpt-4o-mini" for speed and cost
 
 **neighbor_refs** (default: True)
 - Include references to neighboring chunks

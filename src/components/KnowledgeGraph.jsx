@@ -33,17 +33,21 @@ export default function KnowledgeGraph({ data, requirements }) {
         nodes: data.nodes.map(n => ({
           data: {
             id: n.id || n.node_id,
-            name: n.name,
+            name: n.name || n.text,  // Support both formats (KGRelationshipAgent uses 'text')
             type: n.type,
+            isValid: n.is_valid,
+            validationIssues: n.validation_issues,
             ...n.payload
           }
         })),
         edges: data.edges.map(e => ({
           data: {
             id: e.id || e.edge_id,
-            source: e.from || e.from_node_id,
-            target: e.to || e.to_node_id,
-            rel: e.rel,
+            source: e.source || e.from || e.from_node_id,  // Support 'source' from KGRelationshipAgent
+            target: e.target || e.to || e.to_node_id,      // Support 'target' from KGRelationshipAgent
+            rel: e.rel || e.type,  // Support 'type' from KGRelationshipAgent
+            isValid: e.is_valid,
+            validationIssues: e.validation_issues,
             ...e.payload
           }
         }))

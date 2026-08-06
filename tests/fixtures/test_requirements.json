@@ -1,0 +1,39 @@
+{
+  "requirements": [
+    {
+      "id": "REQ-001",
+      "text": "The system must authenticate users within 2 seconds.",
+      "tag": "Security",
+      "priority": "Must",
+      "evidence_refs": ["chunk-1"]
+    },
+    {
+      "id": "REQ-002",
+      "text": "User passwords must be encrypted using AES-256.",
+      "tag": "Security",
+      "priority": "Must",
+      "evidence_refs": ["chunk-1"]
+    },
+    {
+      "id": "REQ-003",
+      "text": "The system shall support multi-factor authentication.",
+      "tag": "Security",
+      "priority": "Must",
+      "evidence_refs": ["chunk-1"]
+    },
+    {
+      "id": "REQ-004",
+      "text": "Admin users can reset user passwords.",
+      "tag": "Functional",
+      "priority": "Should",
+      "evidence_refs": ["chunk-1"]
+    },
+    {
+      "id": "REQ-005",
+      "text": "The API must respond within 500 milliseconds.",
+      "tag": "Performance",
+      "priority": "Must",
+      "evidence_refs": ["chunk-1"]
+    }
+  ]
+}

@@ -1,0 +1,70 @@
+{
+  "model": "gpt-4o",
+  "api_key": "${OPENAI_API_KEY}",
+  "api_base": "${OPENAI_API_BASE}",
+  "temperature": 0.7,
+  "max_tokens": 2000,
+  "timeout": 60,
+  "retry_attempts": 3,
+  "retry_delay": 1,
+  "agents": {
+    "requirements_extraction": {
+      "model": "gpt-4o",
+      "temperature": 0.5,
+      "max_tokens": 2000
+    },
+    "kg_relationship": {
+      "model": "gpt-4o",
+      "temperature": 0.7,
+      "max_tokens": 2000
+    },
+    "mermaid_generator": {
+      "model": "gpt-4o",
+      "temperature": 0.3,
+      "max_tokens": 2000
+    },
+    "requirements_summary": {
+      "model": "gpt-4o",
+      "temperature": 0.5,
+      "max_tokens": 2000
+    },
+    "output_validator": {
+      "model": "gpt-4o",
+      "temperature": 0.3,
+      "max_tokens": 2000
+    }
+  },
+  "chunking": {
+    "max_tokens": 800,
+    "overlap_tokens": 200,
+    "neighbor_refs": true
+  },
+  "diagram_types": [
+    "dependency",
+    "conflict",
+    "grouped",
+    "actor"
+  ],
+  "relationship_types": [
+    "DEPENDS_ON",
+    "CONFLICTS_WITH",
+    "GROUPED_WITH",
+    "ACTOR_RELATION",
+    "DATA_FLOW",
+    "IMPLEMENTED_BY"
+  ],
+  "node_types": [
+    "Requirement",
+    "Actor",
+    "Entity",
+    "Tag",
+    "Group"
+  ],
+  "validation": {
+    "syntax_check": true,
+    "consistency_check": true,
+    "completeness_check": true,
+    "semantic_check": true,
+    "cross_reference_check": true
+  }
+}

@@ -258,7 +258,19 @@ The `arch_team/` module provides a sophisticated multi-agent system for requirem
 
 ### Architecture Variants
 
-**AutoGen 0.4+ (Modern, Recommended)**
+**Society of Mind Master Workflow (AutoGen 4.7.2, Recommended)**
+```bash
+# Start the arch_team service
+python -m arch_team.service
+# Then POST to /api/arch_team/process with files
+```
+- Entry: `arch_team/agents/master_agent.py` [run_master_workflow():337]
+- Uses AutoGen's `SocietyOfMindAgent` pattern with 7 specialized agents
+- Workflow: ChunkMiner → KG Build → Validation → RAG → QA
+- SSE streaming for real-time UI updates via `/api/workflow/stream`
+- Human-in-the-loop via `/api/clarification/stream`
+
+**AutoGen 0.4+ RAC (Legacy)**
 ```bash
 python -m arch_team.autogen_rac
 ```
@@ -280,6 +292,54 @@ python -m arch_team.main --mode chunk_miner --path "data/*.md" --neighbor-eviden
 - ENV: `ARCH_REFLECTION_ROUNDS` (default: 1), `ARCH_MODEL_CONTEXT_MAX` (default: 12)
 
 ### Agent Types
+
+#### Core Agents (AutoGen 4.7.2)
+
+**RequirementsExtractionAgent** (`arch_team/agents/requirements_extraction_agent.py`)
+- Extracts requirements with cross-chunk context and deduplication
+- Key methods: `extract_requirements_with_context()` [line 85], `deduplicate_requirements()` [line 144]
+- Validates required fields (id, text, tag, priority, evidence_refs)
+
+**KGRelationshipAgent** (`arch_team/agents/kg_relationship_agent.py`)
+- Extracts relationships: DEPENDS_ON, CONFLICTS_WITH, GROUPED_WITH, ACTOR_RELATION, DATA_FLOW, IMPLEMENTED_BY
+- Key methods: `build_knowledge_graph()` [line 97], `_validate_knowledge_graph()` [line 115]
+- Node types: Requirement, Actor, Entity, Tag, Group
+- Validates nodes (required: id, type, text) and edges (required: source, target, type)
+
+**MermaidGeneratorAgent** (`arch_team/agents/mermaid_generator_agent.py`)
+- Generates Mermaid diagrams from knowledge graphs
+- 4 diagram types: dependency, conflict, grouped, actor
+- Key methods: `generate_mermaid_diagram()` [line 62], `validate_mermaid_syntax()` [line 95]
+
+**RequirementsSummaryAgent** (`arch_team/agents/requirements_summary_agent.py`)
+- Generates summary statistics and quality metrics
+- Key methods: `generate_summary()` [line 58], `_calculate_quality_score()` [line 180]
+- Output: total_requirements, by_tag, by_priority, conflicts, dependencies, quality_score
+
+**OutputValidator** (`arch_team/agents/output_validator.py`)
+- Multi-stage validation (5 criteria):
+  - Syntax: Mermaid format validity, balanced braces
+  - Consistency: All KG requirements in Mermaid diagram
+  - Completeness: All edge endpoints exist as nodes
+  - Semantic: Cycle detection in DEPENDS_ON edges
+  - Cross-reference: Evidence refs format validation
+- Key method: `validate_output()` [line 205]
+
+#### Delegator Agents (Parallel Processing)
+
+**ValidationDelegatorAgent** (`arch_team/agents/validation_delegator.py`)
+- Parallel batch validation with configurable concurrency
+- ENV: `VALIDATION_MAX_CONCURRENT` (default: 5)
+
+**RewriteDelegatorAgent** (`arch_team/agents/rewrite_delegator.py`)
+- Parallel requirement rewriting with iterative improvement
+- ENV: `REWRITE_MAX_CONCURRENT` (default: 3), `REWRITE_MAX_ATTEMPTS` (default: 3), `REWRITE_TARGET_SCORE` (default: 0.7)
+
+**ClarificationDelegator** (`arch_team/agents/clarification_delegator.py`)
+- Generates clarification questions for ambiguous requirements
+- ENV: `CLARIFICATION_MAX_CONCURRENT` (default: 5)
+
+#### Legacy Agents (EventBus/RAC)
 
 **PlannerAgent** (`arch_team/agents/planner.py`)
 - Creates minimal 3-5 step execution plan
@@ -326,7 +386,50 @@ python -m arch_team.service
 # Frontend: http://localhost:8000/frontend/mining_demo.html
 ```
 
-**Key endpoints:**
+#### Master Workflow
+
+`POST /api/arch_team/process` - Complete workflow orchestration
+- Multipart: `files` field
+- Workflow: ChunkMiner → KG Build → Validation → RAG → QA
+- Returns: `{success, correlation_id, requirements, knowledge_graph, validation_results}`
+- Real-time updates via SSE streams
+
+#### Real-time Streaming (SSE)
+
+`GET /api/workflow/stream?correlation_id=...` - Workflow message stream
+- Message types: `agent_message`, `workflow_status`, `workflow_result`
+
+`GET /api/clarification/stream?correlation_id=...` - Clarification questions stream
+- Broadcasts questions from `ask_user` tool
+
+`POST /api/clarification/answer` - Submit user answers
+- JSON: `{correlation_id, question_id, answer}`
+
+#### RAG & Semantic Analysis
+
+`POST /api/rag/duplicates` - Semantic duplicate detection
+- JSON: `{items: [DTO, ...], threshold: 0.85}`
+- Uses Union-Find grouping for transitive similarity
+- Response: `{success, groups: [[id1, id2], ...]}`
+
+`POST /api/rag/search` - Semantic search in requirements
+- JSON: `{query, top_k: 10}`
+- Response: `{success, results: [{id, score, text}, ...]}`
+
+#### Validation
+
+`POST /api/v2/evaluate/single` - Single requirement evaluation
+- JSON: `{text, criteria: [...]}`
+- Response: `{score, issues, suggestions}`
+
+`POST /api/v2/evaluate/batch` - Batch evaluation
+- JSON: `{items: [{id, text}, ...]}`
+- Response: `{results: [{id, score, issues}, ...]}`
+
+`POST /api/validation/run` - Society of Mind validation trigger
+- JSON: `{items: [DTO, ...], options: {...}}`
+
+#### Mining
 
 `POST /api/mining/upload` - Chunk-based requirements mining
 - Multipart: `file` or `files` fields
@@ -336,6 +439,8 @@ python -m arch_team.service
 `POST /api/mining/report` - Generate markdown report
 - JSON: `{items: [{req_id, title, tag, evidence_refs}, ...]}`
 - Response: `{success, markdown, count, items}`
+
+#### Knowledge Graph
 
 `POST /api/kg/build` - Build knowledge graph
 - JSON: `{items: [DTO, ...], options: {persist: "qdrant", use_llm: false, llm_fallback: true}}`
@@ -354,6 +459,22 @@ python -m arch_team.service
 - 1-hop neighborhood query
 - `dir`: "in" | "out" | "both"
 - `rel`: comma-separated relation types (optional filter)
+
+### Tools
+
+Agent tools are located in `arch_team/tools/`:
+- `mining_tools.py` - ChunkMiner invocation
+- `kg_tools.py` - KG build/query
+- `validation_tools.py` - Requirement validation
+- `rag_tools.py` - Duplicate detection, coverage analysis
+
+### Configuration
+
+**AutoGen 4.7.2 Config:**
+- `config/autogen_config.json` - Agent configurations
+- `config/autogen_config.py` - Config loader with environment override
+
+Config structure includes: agents, chunking, diagram_types, relationship_types, node_types, validation settings.
 
 ### Key Patterns
 
@@ -401,6 +522,13 @@ ARCH_MODEL_CONTEXT_MAX=12
 ARCH_REFLECTION_ROUNDS=1             # 1=single pass, >1=reflection
 CHUNK_MINER_NEIGHBORS=1              # enable neighbor evidence
 
+# Parallel Processing (Delegator Agents)
+VALIDATION_MAX_CONCURRENT=5          # parallel validation workers
+REWRITE_MAX_CONCURRENT=3             # parallel rewrite workers
+REWRITE_MAX_ATTEMPTS=3               # max rewrite iterations
+REWRITE_TARGET_SCORE=0.7             # target quality score
+CLARIFICATION_MAX_CONCURRENT=5       # parallel clarification workers
+
 # Qdrant (shared)
 QDRANT_URL=http://localhost          # or http://host.docker.internal for Docker
 QDRANT_PORT=6401                     # docker-compose maps container 6333 to host 6401
@@ -413,6 +541,12 @@ APP_PORT=8000
 ```
 
 ### Testing
+
+**Test Structure:**
+- `tests/arch_team/` - Unit tests
+- `tests/arch_team/integration/` - Integration tests (real LLM calls)
+- `tests/mocks/mock_llm_calls.py` - Centralized mock LLM responses
+- `tests/fixtures/` - Test data (requirements JSON, KG JSON)
 
 ```bash
 # AutoGen smoke tests
@@ -429,6 +563,15 @@ pytest tests/arch_team/test_autogen_rag_tool.py
 
 # Qdrant trace sink
 pytest tests/arch_team/test_qdrant_trace_sink.py
+
+# New AutoGen 4.7.2 agent unit tests
+pytest tests/arch_team/test_requirements_extraction_agent.py
+pytest tests/arch_team/test_kg_relationship_agent.py
+pytest tests/arch_team/test_mermaid_generator_agent.py
+pytest tests/arch_team/test_requirements_summary_agent.py
+
+# Integration tests (requires LLM API key)
+pytest tests/arch_team/integration/
 ```
 
 ### Common Workflows
@@ -463,16 +606,30 @@ python -m arch_team.autogen_rac
 
 ### Important Code Locations
 
+**Entry Points:**
+- Master workflow: `arch_team/agents/master_agent.py` [run_master_workflow():337]
 - AutoGen entry: `arch_team/autogen_rac.py` [main():98]
 - EventBus entry: `arch_team/main.py` [main():75]
 - Web service: `arch_team/service.py` [create_app():341]
+
+**AutoGen 4.7.2 Agents:**
+- RequirementsExtractionAgent: `arch_team/agents/requirements_extraction_agent.py` [extract_requirements_with_context():85]
+- KGRelationshipAgent: `arch_team/agents/kg_relationship_agent.py` [build_knowledge_graph():97]
+- MermaidGeneratorAgent: `arch_team/agents/mermaid_generator_agent.py` [generate_mermaid_diagram():62]
+- RequirementsSummaryAgent: `arch_team/agents/requirements_summary_agent.py` [generate_summary():58]
+- OutputValidator: `arch_team/agents/output_validator.py` [validate_output():205]
+
+**Legacy Agents:**
 - Planner: `arch_team/agents/planner.py` [on_message():54]
 - Solver: `arch_team/agents/solver.py` [on_message():59]
 - ChunkMiner: `arch_team/agents/chunk_miner.py` [mine_files_or_texts():176]
 - KG Agent: `arch_team/agents/kg_agent.py` [run():47]
+
+**Runtime:**
 - CoT processing: `arch_team/runtime/cot_postprocessor.py` [extract_blocks(), ui_payload()]
 - RAG tool: `arch_team/autogen_tools/requirements_rag.py` [search_requirements()]
 - Workbench: `arch_team/workbench/workbench.py` [get_default_workbench()]
+- Config loader: `config/autogen_config.py` [get_autogen_config()]
 
 ## Troubleshooting
 
@@ -503,4 +660,3 @@ python -m arch_team.autogen_rac
 - Routes reference: `docs/backend/ROUTES.md`
 - FastAPI migration: `README_FASTAPI.md`
 - Backend v2 (LangExtract fixes): `backend/README.md`
-- merk dir den stand wir machen einen kurzen ausflug

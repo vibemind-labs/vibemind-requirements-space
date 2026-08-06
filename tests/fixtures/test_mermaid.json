@@ -1,0 +1,9 @@
+{
+  "mermaid": "graph TD\n    subgraph Security\n        REQ001[REQ-001: Auth]\n        REQ002[REQ-002: Encryption]\n        REQ003[REQ-003: MFA]\n    end\n    subgraph Functional\n        REQ004[REQ-004: Password Reset]\n    end\n    subgraph Performance\n        REQ005[REQ-005: API Latency]\n    end\n    \n    User --> REQ001\n    User --> REQ002\n    Admin --> REQ004\n    REQ001 --> REQ003",
+  "diagram_type": "dependency",
+  "metadata": {
+    "nodes_count": 10,
+    "edges_count": 9,
+    "groups_count": 3
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "nodes": [
+    {"id": "REQ-001", "type": "Requirement", "text": "Auth"},
+    {"id": "REQ-002", "type": "Requirement", "text": "Encryption"},
+    {"id": "REQ-003", "type": "Requirement", "text": "MFA"},
+    {"id": "REQ-004", "type": "Requirement", "text": "Password Reset"},
+    {"id": "REQ-005", "type": "Requirement", "text": "API Latency"},
+    {"id": "User", "type": "Actor", "text": "User"},
+    {"id": "Admin", "type": "Actor", "text": "Admin"},
+    {"id": "Security", "type": "Tag", "text": "Security"},
+    {"id": "Functional", "type": "Tag", "text": "Functional"},
+    {"id": "Performance", "type": "Tag", "text": "Performance"}
+  ],
+  "edges": [
+    {"source": "REQ-001", "target": "Security", "type": "HAS_TAG"},
+    {"source": "REQ-002", "target": "Security", "type": "HAS_TAG"},
+    {"source": "REQ-003", "target": "Security", "type": "HAS_TAG"},
+    {"source": "REQ-004", "target": "Functional", "type": "HAS_TAG"},
+    {"source": "REQ-005", "target": "Performance", "type": "HAS_TAG"},
+    {"source": "User", "target": "REQ-001", "type": "ACTOR_RELATION"},
+    {"source": "User", "target": "REQ-002", "type": "ACTOR_RELATION"},
+    {"source": "Admin", "target": "REQ-004", "type": "ACTOR_RELATION"},
+    {"source": "REQ-001", "target": "REQ-003", "type": "DEPENDS_ON"}
+  ]
+}
