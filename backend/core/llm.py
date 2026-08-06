@@ -66,6 +66,15 @@ if DEBUG_LLM:
 
 
 def _heuristic_mock_evaluation(requirement_text: str, criteria_keys: List[str]) -> List[Dict[str, Any]]:
+    # Fallback-Scores sind KEINE echte Bewertung. Immer laut warnen und jedes
+    # Detail mit mock=True markieren, damit Aufrufer Fake- von LLM-Scores
+    # unterscheiden koennen (sonst maskiert der Fallback Konfigurationsfehler).
+    LOGGER.warning(json.dumps({
+        "event": "llm.evaluate.mock_fallback",
+        "message": "Heuristic mock evaluation used - scores are NOT LLM-based",
+        "api_key_present": bool(getattr(settings, "OPENROUTER_API_KEY", "")),
+        "model": getattr(settings, "OPENAI_MODEL", ""),
+    }))
     text = (requirement_text or "").lower()
     contains_number = any(ch.isdigit() for ch in text)
     words = text.split()
@@ -90,7 +99,7 @@ def _heuristic_mock_evaluation(requirement_text: str, criteria_keys: List[str]) 
     details: List[Dict[str, Any]] = []
     for key in criteria_keys:
         sc, fb = mapping.get(key, (0.6, "Allgemeine Einschätzung"))
-        details.append({"criterion": key, "score": sc, "passed": sc >= 0.7, "feedback": fb})
+        details.append({"criterion": key, "score": sc, "passed": sc >= 0.7, "feedback": fb, "mock": True})
     return details
 
 

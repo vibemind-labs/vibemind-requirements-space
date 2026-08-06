@@ -173,6 +173,7 @@ class EvalDetailV2(BaseModel):
     score: float = Field(0.0, ge=0.0, le=1.0, description="Score 0..1")
     passed: bool = Field(..., description="true, wenn Schwelle fuer dieses Kriterium erreicht")
     feedback: str = Field("", description="Optionale Begruendung/Rueckmeldung des LLM/Heuristik")
+    mock: bool = Field(False, description="true, wenn der Score aus dem Heuristik-Fallback stammt (kein LLM)")
 
 
 class EvaluateSingleRequest(BaseModel):

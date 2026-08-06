@@ -646,7 +646,17 @@ class RequirementsOrchestrator:
         
         # Convert results
         validation_results = delegator.to_dict_results(batch_result)
-        
+
+        # Stamp score/verdict onto the requirement dicts themselves so callers
+        # (e.g. dashboard _handle_wizard_improve) can read _validation_score
+        # from the returned requirements instead of re-joining by req_id.
+        by_req_id = {r.get("req_id"): r for r in validation_results}
+        for req in requirements:
+            vr = by_req_id.get(req.get("req_id"))
+            if vr is not None:
+                req["_validation_score"] = vr.get("score")
+                req["_validation_verdict"] = vr.get("verdict")
+
         # Separate passed and failed
         passed_results = [r for r in validation_results if r["verdict"] == "pass"]
         failed_results = [r for r in validation_results if r["verdict"] == "fail"]

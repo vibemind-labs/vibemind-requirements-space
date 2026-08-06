@@ -50,6 +50,17 @@ fastapi_app = FastAPI(
     description="Korrigierte Version mit LangExtract-Fixes (Hybrid: FastAPI-Router + eingebettetes Flask).",
     version="2.0.0"
 )
+
+
+@fastapi_app.on_event("startup")
+async def _ensure_db_schema() -> None:
+    # Ohne geseedete criterion-Tabelle liefert /api/v2/evaluate/* nur 400er.
+    # init_db() ist idempotent (CREATE IF NOT EXISTS + Seed nur bei leerer Tabelle).
+    try:
+        from backend.core.db import init_db
+        init_db()
+    except Exception as e:
+        logging.error(f"init_db on startup failed: {e}")
 # Globale CORS-Policy (vereinheitlicht)
 fastapi_app.add_middleware(
     CORSMiddleware,
