@@ -8,6 +8,7 @@
 
 The model endpoint comes from the environment as usual (OPENROUTER_BASE_URL / OPENROUTER_API_KEY /
 OPENAI_MODEL); for the subscription route the base URL points at a local OpenAI-compatible shim.
+SQLITE_PATH defaults to ./arch_lauf.db; schema and criteria are created there before the first call.
 After mining, the worst case for the rest of the run is computed; if it does not fit the cleared
 number the run stops before validation. Any model failure ends the run with an error (fail-closed).
 Exit codes: 0 completed, 1 stopped with error, 2 refused to start.
@@ -86,6 +87,9 @@ def run(path: Path, freigabe: int, model: str, chunk_size: int, chunk_overlap: i
     from arch_team.agents.abo_zugang import install_call_cap
     from arch_team.agents.master_agent import run_master_workflow
 
+    from backend.core.db import init_db
+
+    init_db()  # local SQLite (SQLITE_PATH): schema and the criteria the evaluation reads; no model call
     cap = min(int(freigabe), _max_calls())
     counter = install_call_cap(cap)
     _install_mining_guard(cap)
@@ -116,6 +120,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     for k, v in SWITCHES.items():
         os.environ.setdefault(k, v)
+    os.environ.setdefault("SQLITE_PATH", "arch_lauf.db")  # own file per run directory, not the server's app.db
     if not a.white_paper.is_file():
         print(json.dumps({"error": "white_paper_fehlt"}), file=sys.stderr)
         return 2

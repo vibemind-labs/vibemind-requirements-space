@@ -148,9 +148,8 @@ def test_bewertung_im_prozess_fehler_bricht_ab(monkeypatch, ohne_mock) -> None:
 
 
 def test_laeufer_schaetzt_ohne_modell(tmp_path, capsys, monkeypatch, ohne_zaehler) -> None:
-    for k in abo_lauf.SWITCHES:
-        monkeypatch.delenv(k, raising=False)
-    monkeypatch.delenv("ARCH_MAX_CALLS", raising=False)
+    for k in [*abo_lauf.SWITCHES, "ARCH_MAX_CALLS", "SQLITE_PATH"]:
+        monkeypatch.delenv(k, raising=False)  # main() sets defaults; monkeypatch removes them again
     wp = tmp_path / "white_paper.md"
     wp.write_text("# Ziel\n\n" + "Der Hofladen bietet Selbstbedienung rund um die Uhr. " * 20, encoding="utf-8")
     assert abo_lauf.main([str(wp), "--schaetzen", "--annahme-je-chunk", "5"]) == 0
@@ -163,6 +162,8 @@ def test_laeufer_schaetzt_ohne_modell(tmp_path, capsys, monkeypatch, ohne_zaehle
 def test_laeufer_verweigert_ohne_freigabe_und_mit_mock(tmp_path, monkeypatch, ohne_zaehler) -> None:
     wp = tmp_path / "white_paper.md"
     wp.write_text("Text", encoding="utf-8")
+    for k in [*abo_lauf.SWITCHES, "SQLITE_PATH"]:
+        monkeypatch.delenv(k, raising=False)
     monkeypatch.setattr(abo_lauf, "run", lambda *a, **k: pytest.fail("must not run"))
     assert abo_lauf.main([str(wp)]) == 2
     assert abo_lauf.main([str(wp), "--freigabe", "0"]) == 2
