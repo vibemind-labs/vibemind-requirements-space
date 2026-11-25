@@ -68,7 +68,10 @@ def evaluate_requirement(
 
     except requests.RequestException as e:
         logger.error(f"Evaluation API call failed: {e}")
-        # Return fallback result
+        # Fail closed: an unreachable evaluator is not a score of 0 (MOCK_MODE excepted).
+        from backend.core.llm import _fail
+        _fail("evaluate_api", f"{type(e).__name__}: {e}", e)
+        # Return fallback result (MOCK_MODE only)
         return {
             "score": 0.0,
             "verdict": "fail",
@@ -119,7 +122,9 @@ def rewrite_requirement(
 
     except (requests.RequestException, ValueError, IndexError) as e:
         logger.error(f"Rewrite API call failed: {e}")
-        # Return fallback result
+        from backend.core.llm import _fail
+        _fail("rewrite_api", f"{type(e).__name__}: {e}", e)
+        # Return fallback result (MOCK_MODE only)
         return {
             "originalText": requirement_text,
             "correctedText": requirement_text,
@@ -174,6 +179,8 @@ def suggest_improvements(
 
     except (requests.RequestException, KeyError, IndexError) as e:
         logger.error(f"Suggestion API call failed: {e}")
+        from backend.core.llm import _fail
+        _fail("suggest_api", f"{type(e).__name__}: {e}", e)
         return []
 
 

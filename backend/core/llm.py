@@ -103,6 +103,26 @@ def _heuristic_mock_evaluation(requirement_text: str, criteria_keys: List[str]) 
     return details
 
 
+class LLMUnavailableError(RuntimeError):
+    """The model was unreachable or gave no usable answer.
+
+    Raised instead of inventing scores, suggestions or rewrites. Only an explicit
+    MOCK_MODE (tests, local demos) may still return heuristic stand-ins.
+    """
+
+
+def _mock_allowed() -> bool:
+    return bool(getattr(settings, "MOCK_MODE", False))
+
+
+def _fail(where: str, reason: str, cause: BaseException | None = None) -> None:
+    """Raise LLMUnavailableError unless MOCK_MODE is on (then the caller may fall back)."""
+    if _mock_allowed():
+        return
+    LOGGER.error(json.dumps({"event": f"llm.{where}.failed", "reason": reason[:300]}))
+    raise LLMUnavailableError(f"{where}: {reason[:300]}") from cause
+
+
 def _make_chat_args(system_prompt: str, user_payload: Dict[str, Any]) -> Dict[str, Any]:
     user_prompt = json.dumps(user_payload, ensure_ascii=False)
     chat_args: Dict[str, Any] = dict(
@@ -180,10 +200,12 @@ def llm_evaluate(requirement_text: str, criteria_keys: List[str], context: Dict[
     if not settings.OPENROUTER_API_KEY:
         if DEBUG_LLM:
             LOGGER.warning(json.dumps({"event": "llm.evaluate.fallback", "reason": "no_api_key"}))
+        _fail("evaluate", "no_api_key")
         return _heuristic_mock_evaluation(requirement_text, criteria_keys)
     if not OPENAI_IMPORT_OK and not _OpenAIClient:
         if DEBUG_LLM:
             LOGGER.warning(json.dumps({"event": "llm.evaluate.fallback", "reason": "openai_module_missing"}))
+        _fail("evaluate", "openai_module_missing")
         return _heuristic_mock_evaluation(requirement_text, criteria_keys)
 
     try:
@@ -272,6 +294,7 @@ def llm_evaluate(requirement_text: str, criteria_keys: List[str], context: Dict[
     except Exception as e:
         if DEBUG_LLM:
             LOGGER.error(json.dumps({"event": "llm.evaluate.error", "message": str(e)}))
+        _fail("evaluate", f"{type(e).__name__}: {e}", e)
         return _heuristic_mock_evaluation(requirement_text, criteria_keys)
 
 
@@ -313,6 +336,7 @@ def llm_evaluate_batch(
     if not settings.OPENROUTER_API_KEY:
         if DEBUG_LLM:
             LOGGER.warning(json.dumps({"event": "llm.evaluate_batch.fallback", "reason": "no_api_key"}))
+        _fail("evaluate_batch", "no_api_key")
         return [
             {"id": req.get("id", f"REQ-{i}"), "details": _heuristic_mock_evaluation(req.get("text", ""), criteria_keys)}
             for i, req in enumerate(requirements)
@@ -320,6 +344,7 @@ def llm_evaluate_batch(
     if not OPENAI_IMPORT_OK and not _OpenAIClient:
         if DEBUG_LLM:
             LOGGER.warning(json.dumps({"event": "llm.evaluate_batch.fallback", "reason": "openai_module_missing"}))
+        _fail("evaluate_batch", "openai_module_missing")
         return [
             {"id": req.get("id", f"REQ-{i}"), "details": _heuristic_mock_evaluation(req.get("text", ""), criteria_keys)}
             for i, req in enumerate(requirements)
@@ -456,6 +481,7 @@ def llm_evaluate_batch(
         if missing_ids:
             if DEBUG_LLM:
                 LOGGER.warning(json.dumps({"event": "llm.evaluate_batch.missing_results", "missing_ids": list(missing_ids)}))
+            _fail("evaluate_batch", f"missing_results: {len(missing_ids)}")
             for missing_id in missing_ids:
                 req_text = next((r.get("text", "") for r in requirements if r.get("id") == missing_id), "")
                 normalized_results.append({
@@ -475,7 +501,10 @@ def llm_evaluate_batch(
     except Exception as e:
         if DEBUG_LLM:
             LOGGER.error(json.dumps({"event": "llm.evaluate_batch.error", "message": str(e)}))
-        # Fallback to individual heuristic evaluations
+        if isinstance(e, LLMUnavailableError):
+            raise
+        _fail("evaluate_batch", f"{type(e).__name__}: {e}", e)
+        # Fallback to individual heuristic evaluations (MOCK_MODE only)
         return [
             {"id": req.get("id", f"REQ-{i}"), "details": _heuristic_mock_evaluation(req.get("text", ""), criteria_keys)}
             for i, req in enumerate(requirements)
@@ -542,6 +571,7 @@ def llm_suggest(requirement_text: str, context: Dict[str, Any]) -> List[Dict[str
     if not settings.OPENROUTER_API_KEY or (not OPENAI_IMPORT_OK and not _OpenAIClient):
         if DEBUG_LLM:
             LOGGER.warning(json.dumps({"event": "llm.suggest.path", "mode": "fallback_empty", "reason": "no_api_key_or_openai_missing"}))
+        _fail("suggest", "no_api_key_or_openai_missing")
         return []
 
     # Robuste Normalisierung bleibt unverändert ...
@@ -652,6 +682,7 @@ def llm_suggest(requirement_text: str, context: Dict[str, Any]) -> List[Dict[str
     except Exception as e:
         if DEBUG_LLM:
             LOGGER.error(json.dumps({"event": "llm.suggest.error", "message": str(e)}))
+        _fail("suggest", f"{type(e).__name__}: {e}", e)
         return []
 
 
@@ -676,6 +707,7 @@ def llm_rewrite(requirement_text: str, context: Dict[str, Any]) -> str:
     if not settings.OPENROUTER_API_KEY or (not OPENAI_IMPORT_OK and not _OpenAIClient):
         if DEBUG_LLM:
             LOGGER.warning(json.dumps({"event": "llm.rewrite.path", "mode": "heuristic_original", "reason": "no_api_key_or_openai_missing"}))
+        _fail("rewrite", "no_api_key_or_openai_missing")
         return requirement_text
 
     try:
@@ -740,6 +772,7 @@ def llm_rewrite(requirement_text: str, context: Dict[str, Any]) -> str:
     except Exception as e:
         if DEBUG_LLM:
             LOGGER.error(json.dumps({"event": "llm.rewrite.error", "message": str(e)}))
+        _fail("rewrite", f"{type(e).__name__}: {e}", e)
         return requirement_text
 
 # --- Suggestion-Block-Parser und Konstanten ---
@@ -869,6 +902,7 @@ def llm_apply_with_suggestions(
     if not settings.OPENROUTER_API_KEY or (not OPENAI_IMPORT_OK and not _OpenAIClient):
         if DEBUG_LLM:
             LOGGER.warning(json.dumps({"event": "llm.apply.path", "mode": "mock_like", "reason": "no_api_key_or_openai_missing"}))
+        _fail("apply", "no_api_key_or_openai_missing")
         return _mock_split(selected_atoms) if str(mode).lower() == "split" else _mock_merge(selected_atoms)
 
     # LLM-Mode
@@ -970,4 +1004,5 @@ def llm_apply_with_suggestions(
     except Exception as e:
         if DEBUG_LLM:
             LOGGER.error(json.dumps({"event": "llm.apply.error", "message": str(e)}))
+        _fail("apply", f"{type(e).__name__}: {e}", e)
         return _mock_split(selected_atoms) if str(mode).lower() == "split" else _mock_merge(selected_atoms)

@@ -468,6 +468,8 @@ Execute all phases and signal WORKFLOW_COMPLETE when done.
         )
 
         logger.info(f"Mining completed: {len(requirements)} requirements extracted")
+        from arch_team.agents.fail_closed import check_mining, check_validation, check_rewrite
+        check_mining(requirements, file_records)
         _send_to_workflow_stream(
             correlation_id,
             "agent_message",
@@ -563,6 +565,7 @@ Execute all phases and signal WORKFLOW_COMPLETE when done.
         validation_results = delegator.to_dict_results(batch_result)
         passed_count = batch_result.passed_count
         failed_count = batch_result.failed_count
+        check_validation(batch_result.error_count, len(requirements))
 
         logger.info(f"Parallel validation completed in {batch_result.total_time_ms}ms: "
                    f"{passed_count} passed, {failed_count} failed")
@@ -618,6 +621,7 @@ Execute all phases and signal WORKFLOW_COMPLETE when done.
                 correlation_id=correlation_id
             )
             
+            check_rewrite(rewrite_batch_result.error_count, rewrite_batch_result.total_count)
             rewrite_results = {
                 "total_count": rewrite_batch_result.total_count,
                 "rewritten_count": rewrite_batch_result.rewritten_count,

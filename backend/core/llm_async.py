@@ -41,8 +41,8 @@ class AsyncLLMService:
     
     def __init__(self):
         self.model = OPENAI_MODEL
-        # Ohne API-Key stets Mock-Modus aktivieren (deterministische Tests)
-        self.mock_mode = MOCK_MODE or (not OPENROUTER_API_KEY)
+        # Mock only when explicitly requested; a missing key is an error, not a mock run.
+        self.mock_mode = MOCK_MODE
         self.request_count = 0
         
     async def _make_async_llm_call(

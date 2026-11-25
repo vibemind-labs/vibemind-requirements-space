@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from backend.core import settings
-from backend.core.llm import _make_chat_args, _extract_json_string
+from backend.core.llm import _make_chat_args, _extract_json_string, _fail
 
 # Load criteria config at module level for efficient access
 _CRITERIA_CONFIG: Dict[str, Dict[str, Any]] = {}
@@ -156,6 +156,7 @@ class CriterionSpecialistAgent(ABC):
             Score between 0.0 (fails criterion) and 1.0 (perfect)
         """
         if MOCK_MODE or not self.client:
+            _fail("criterion", f"{self.criterion_name}: no model client")
             return self._mock_evaluate(requirement_text, context)
 
         try:
@@ -181,6 +182,7 @@ class CriterionSpecialistAgent(ABC):
 
         except Exception as e:
             logger.error(f"Error evaluating {self.criterion_name}: {e}")
+            _fail("criterion", f"{self.criterion_name}: {type(e).__name__}: {e}", e)
             return 0.5  # Neutral score on error
 
     async def suggest_fix(self, requirement_text: str, score: float, context: Optional[Dict[str, Any]] = None) -> str:
@@ -196,6 +198,7 @@ class CriterionSpecialistAgent(ABC):
             Suggestion text explaining what to improve
         """
         if MOCK_MODE or not self.client:
+            _fail("criterion", f"{self.criterion_name}: no model client")
             return self._mock_suggest(requirement_text, score, context)
 
         try:
@@ -220,6 +223,7 @@ class CriterionSpecialistAgent(ABC):
 
         except Exception as e:
             logger.error(f"Error suggesting fix for {self.criterion_name}: {e}")
+            _fail("criterion", f"{self.criterion_name}: {type(e).__name__}: {e}", e)
             return f"Unable to generate suggestion for {self.criterion_name}"
 
     async def apply_fix(self, requirement_text: str, suggestion: str, context: Optional[Dict[str, Any]] = None) -> str:
@@ -235,6 +239,7 @@ class CriterionSpecialistAgent(ABC):
             Improved requirement text
         """
         if MOCK_MODE or not self.client:
+            _fail("criterion", f"{self.criterion_name}: no model client")
             return self._mock_apply(requirement_text, suggestion, context)
 
         try:
@@ -259,6 +264,7 @@ class CriterionSpecialistAgent(ABC):
 
         except Exception as e:
             logger.error(f"Error applying fix for {self.criterion_name}: {e}")
+            _fail("criterion", f"{self.criterion_name}: {type(e).__name__}: {e}", e)
             return requirement_text  # Return original on error
 
     async def generate_clarifying_questions(
@@ -290,6 +296,7 @@ class CriterionSpecialistAgent(ABC):
             ]
         """
         if MOCK_MODE or not self.client:
+            _fail("criterion", f"{self.criterion_name}: no model client")
             return self._mock_generate_questions(requirement_text, score, context)
 
         try:
@@ -319,6 +326,7 @@ class CriterionSpecialistAgent(ABC):
 
         except Exception as e:
             logger.error(f"Error generating questions for {self.criterion_name}: {e}")
+            _fail("criterion", f"{self.criterion_name}: {type(e).__name__}: {e}", e)
             # Return a default question based on criterion
             return [{
                 "criterion": self.criterion_name,

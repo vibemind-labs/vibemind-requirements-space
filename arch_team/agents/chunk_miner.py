@@ -257,6 +257,9 @@ class ChunkMinerAgent(AgentBase):
 
         except Exception as e:
             logger.warning("Chunk mining failed (adapter): %s", e)
+            # Fail closed: a model error is not "no requirements in this chunk".
+            from backend.core.llm import _fail
+            _fail("chunk_mining", f"{type(e).__name__}: {e}", e)
             return []
 
         # Process extracted items and ensure required fields
