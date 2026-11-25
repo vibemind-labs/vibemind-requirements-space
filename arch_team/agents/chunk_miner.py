@@ -48,6 +48,36 @@ def _coerce_files_or_texts(files_or_texts: List[Union[str, bytes, Dict[str, Any]
     return out
 
 
+
+_JSON_ANSWER_RULE = (
+    "\n\nAnswer with exactly one JSON object and nothing else, using the fields of submit_requirements: "
+    '{"requirements": [{"title": "...", "tag": "functional", "priority": "must", '
+    '"measurable_criteria": "...", "actors": ["..."], "evidence": "short quote from the text"}]}. '
+    'If the text contains no requirement, answer {"requirements": []}.'
+)
+
+
+def _strip_fence(content: str) -> str:
+    c = (content or "").strip()
+    if c.startswith("```"):
+        c = c.split("\n", 1)[1] if "\n" in c else ""
+        c = c.rstrip()
+        if c.endswith("```"):
+            c = c[:-3]
+    return c.strip()
+
+
+def _parse_json_object(content: str) -> Optional[Dict[str, Any]]:
+    try:
+        data = json.loads(_strip_fence(content))
+    except Exception:
+        return None
+    if not isinstance(data, dict):
+        return None
+    if not isinstance(data.get("requirements"), list) and not isinstance(data.get("items"), list):
+        return None
+    return data
+
 class ChunkMinerAgent(AgentBase):
     """
     Chunk-zu-Requirement Miner:
@@ -112,8 +142,10 @@ class ChunkMinerAgent(AgentBase):
 
     def _parse_items(self, content: str) -> List[Dict[str, Any]]:
         try:
-            data = json.loads(content)
-            items = data.get("items") if isinstance(data, dict) else None
+            data = json.loads(_strip_fence(content))
+            items = None
+            if isinstance(data, dict):
+                items = data.get("items") if isinstance(data.get("items"), list) else data.get("requirements")
             if isinstance(items, list):
                 return [i for i in items if isinstance(i, dict)]
         except Exception:
@@ -230,6 +262,10 @@ class ChunkMinerAgent(AgentBase):
             }
         ]
 
+        from arch_team.agents.abo_zugang import flag as _flag
+        if _flag("ARCH_MINING_JSON"):
+            return self._mine_chunk_json(messages, payload, suggested_req_id, model_override)
+
         try:
             response = self.adapter.create(
                 messages=messages,
@@ -262,6 +298,29 @@ class ChunkMinerAgent(AgentBase):
             _fail("chunk_mining", f"{type(e).__name__}: {e}", e)
             return []
 
+        return self._finish_items(items, payload, suggested_req_id)
+
+    def _mine_chunk_json(self, messages: List[Dict[str, Any]], payload: Dict[str, Any], suggested_req_id: str,
+                         model_override: Optional[str]) -> List[Dict[str, Any]]:
+        """Mining without tool calling (subscription route): the model answers with one JSON object."""
+        from backend.core.llm import _fail
+        msgs = [{"role": "system", "content": EXTRACTION_SYSTEM_PROMPT + _JSON_ANSWER_RULE}] + list(messages[1:])
+        try:
+            response = self.adapter.create(messages=msgs, temperature=self.temperature, model=model_override)
+        except Exception as e:
+            logger.warning("Chunk mining failed (adapter, json): %s", e)
+            _fail("chunk_mining", f"{type(e).__name__}: {e}", e)
+            return []
+        content = str(response or "").strip()
+        parsed = _parse_json_object(content)
+        if parsed is None:
+            _fail("chunk_mining", "answer was not the expected JSON object")
+            return []
+        items = parsed.get("requirements") if isinstance(parsed.get("requirements"), list) else parsed.get("items")
+        items = [i for i in (items or []) if isinstance(i, dict)]
+        return self._finish_items(items, payload, suggested_req_id)
+
+    def _finish_items(self, items: List[Dict[str, Any]], payload: Dict[str, Any], suggested_req_id: str) -> List[Dict[str, Any]]:
         # Process extracted items and ensure required fields
         # Add unique suffixes -a, -b, -c... if multiple requirements from same chunk
         out: List[Dict[str, Any]] = []

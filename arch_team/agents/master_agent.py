@@ -521,15 +521,20 @@ Execute all phases and signal WORKFLOW_COMPLETE when done.
             message="Building Knowledge Graph from requirements..."
         )
 
-        kg_agent = KGAbstractionAgent(default_model=model)
-        kg_result = kg_agent.run(
-            items=requirements,
-            model=model,
-            persist="qdrant",  # Persist to Qdrant
-            use_llm=use_llm_kg,  # Use LLM for entity extraction if enabled
-            llm_fallback=True,  # Fall back to LLM if heuristics fail
-            dedupe=True  # Deduplicate nodes/edges
-        )
+        from arch_team.agents.abo_zugang import flag as _flag
+        if _flag("ARCH_KG_SKIP"):
+            logger.info("Phase 2 skipped (ARCH_KG_SKIP)")
+            kg_result = {"stats": {}, "skipped": True}
+        else:
+            kg_agent = KGAbstractionAgent(default_model=model)
+            kg_result = kg_agent.run(
+                items=requirements,
+                model=model,
+                persist="qdrant",  # Persist to Qdrant
+                use_llm=use_llm_kg,  # Use LLM for entity extraction if enabled
+                llm_fallback=True,  # Fall back to LLM if heuristics fail
+                dedupe=True  # Deduplicate nodes/edges
+            )
 
         kg_stats = kg_result.get("stats", {})
         logger.info(f"KG built: {kg_stats.get('nodes', 0)} nodes, {kg_stats.get('edges', 0)} edges")

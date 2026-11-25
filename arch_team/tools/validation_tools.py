@@ -28,6 +28,25 @@ API_BASE = os.environ.get("VALIDATION_API_BASE", f"http://localhost:{_backend_po
 API_TIMEOUT = int(os.environ.get("VALIDATION_TIMEOUT", "120"))
 
 
+def _evaluate_in_process(requirement_text: str, criteria_keys: Optional[List[str]]) -> Dict[str, Any]:
+    """Same result as /api/v2/evaluate/single, without a backend server (one-off runs)."""
+    from backend.core.llm import _fail
+    from backend.services.evaluation_service import EvaluationService
+
+    try:
+        result = EvaluationService().evaluate_single(requirement_text, criteria_keys=criteria_keys)
+    except Exception as e:  # ServiceError or a fail-closed error from the model call
+        logger.error(f"In-process evaluation failed: {e}")
+        if isinstance(e, RuntimeError) and type(e).__name__ in ("LLMUnavailableError", "CallCapReached"):
+            raise
+        _fail("evaluate_inprocess", f"{type(e).__name__}: {e}", e)
+        return {"score": 0.0, "verdict": "fail", "evaluation": [], "error": str(e)}
+    return {
+        "score": result.get("score"),
+        "verdict": result.get("verdict"),
+        "evaluation": result.get("evaluation", []),
+    }
+
 def evaluate_requirement(
     requirement_text: str,
     criteria_keys: Optional[List[str]] = None
@@ -51,6 +70,10 @@ def evaluate_requirement(
     Raises:
         requests.RequestException: If API call fails
     """
+    from arch_team.agents.abo_zugang import flag as _flag
+    if _flag("ARCH_EVAL_INPROCESS"):
+        return _evaluate_in_process(requirement_text, criteria_keys)
+
     try:
         url = f"{API_BASE}/api/v2/evaluate/single"
         payload = {
